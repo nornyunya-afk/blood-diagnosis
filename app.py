@@ -86,4 +86,4 @@ with gr.Blocks(title="Диагностика по ОАК") as app:
     
     btn.click(fn=predict, inputs=[WBC, RBC, HGB, HCT, MCV, MCH, PLT, NEUT, LYMPH, EO, Age, Sex], outputs=[diag, warns_out])
 
-app.launch()
+app.launch(server_name="0.0.0.0", server_port=8080)
