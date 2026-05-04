@@ -1,9 +1,4 @@
-tensorflow
+gradio
+numpy
 scikit-learn
 joblib
-numpy
-gradio
-pandas
-matplotlib
-seaborn
-openpyxl
