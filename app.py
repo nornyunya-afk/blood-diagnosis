@@ -1,19 +1,14 @@
 import numpy as np
 import gradio as gr
-import tensorflow as tf
-from tensorflow.keras.models import load_model
 import joblib
 import warnings
 warnings.filterwarnings('ignore')
 
-# Загрузка модели
+# Загружаем scaler (модель .keras не используем — она слишком тяжёлая для бесплатного хостинга)
 try:
-    model = load_model('blood_diagnosis_model.keras')
     scaler = joblib.load('blood_scaler.pkl')
-    print("Модель и scaler загружены!")
-except Exception as e:
-    print(f"Ошибка загрузки: {e}")
-    model = None
+    print("Scaler загружен")
+except:
     scaler = None
 
 class_names = {
@@ -30,24 +25,40 @@ class_names = {
 }
 
 def predict(WBC, RBC, HGB, HCT, MCV, MCH, PLT, NEUT, LYMPH, EO, Age, Sex):
-    if model is None:
-        return {"Ошибка": "Модель не загружена"}, ""
-    
-    sex_num = 0 if Sex == "Мужской" else 1
-    data = np.array([[WBC, RBC, HGB, HCT, MCV, MCH, PLT, NEUT, LYMPH, EO, Age, sex_num]])
-    data_s = scaler.transform(data)
-    pred = model.predict(data_s, verbose=0)[0]
-    top3 = np.argsort(pred)[-3:][::-1]
+    # Правила из kod.py
+    if HGB < 100 and MCV < 77:
+        diag, conf = 1, 85
+    elif HGB < 100 and MCV > 105:
+        diag, conf = 2, 85
+    elif HGB > 175 and WBC > 10:
+        diag, conf = 3, 85
+    elif WBC > 16 and NEUT > 80:
+        diag, conf = 4, 90
+    elif WBC < 4.5 and LYMPH > 45:
+        diag, conf = 5, 90
+    elif WBC > 55 and EO > 5:
+        diag, conf = 6, 80
+    elif PLT < 50:
+        diag, conf = 7, 90
+    elif EO > 14:
+        diag, conf = 8, 85
+    elif WBC < 3.5 and HGB < 100 and PLT < 100:
+        diag, conf = 9, 85
+    else:
+        diag, conf = 0, 90
     
     result = {}
-    result["ДИАГНОЗ"] = f"{class_names[top3[0]]} ({pred[top3[0]]*100:.1f}%)"
-    for i, idx in enumerate(top3[1:], 2):
-        result[f"{i}. {class_names[idx]}"] = f"{pred[idx]*100:.1f}%"
+    result["ДИАГНОЗ"] = f"{class_names[diag]}"
+    result["Уверенность"] = f"{conf:.1f}%"
     
     warns = []
     if WBC > 12: warns.append(f"Лейкоциты повышены ({WBC:.1f})")
     elif WBC < 3.5: warns.append(f"Лейкоциты понижены ({WBC:.1f})")
     if HGB < 100: warns.append(f"Гемоглобин низкий ({HGB:.0f})")
+    elif HGB > 170: warns.append(f"Гемоглобин высокий ({HGB:.0f})")
+    if MCV < 77: warns.append(f"MCV понижен ({MCV:.0f})")
+    elif MCV > 105: warns.append(f"MCV повышен ({MCV:.0f})")
+    if PLT < 50: warns.append(f"Тромбоциты критически низкие!")
     if not warns: warns.append("Показатели в норме")
     
     return result, "\n".join(warns)
@@ -73,10 +84,6 @@ with gr.Blocks(title="Диагностика по ОАК") as app:
             diag = gr.Label(label="Результат", num_top_classes=3)
             warns_out = gr.Textbox(label="Анализ показателей", lines=5)
     
-    btn.click(
-        fn=predict,
-        inputs=[WBC, RBC, HGB, HCT, MCV, MCH, PLT, NEUT, LYMPH, EO, Age, Sex],
-        outputs=[diag, warns_out]
-    )
+    btn.click(fn=predict, inputs=[WBC, RBC, HGB, HCT, MCV, MCH, PLT, NEUT, LYMPH, EO, Age, Sex], outputs=[diag, warns_out])
 
 app.launch()
